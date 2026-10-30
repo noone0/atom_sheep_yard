@@ -1,0 +1,9 @@
+ultralytics>=8.3
+opencv-python>=4.10
+numpy>=1.26
+requests>=2.32
+pyyaml>=6.0
+python-dotenv>=1.0
+fastapi>=0.115
+uvicorn>=0.30
+lap>=0.5.12

@@ -1,0 +1,75 @@
+# Sheep Heaven – farm camera surveillance configuration
+# Secrets (API keys, Telegram) live in .env, see .env.example
+
+cameras:
+  - name: lambing_pen_1
+    # RTSP url of the IP camera, or a path to a video file for testing
+    source: "rtsp://user:pass@192.168.1.50:554/h264Preview_01_main"
+    monitors: [lambing, feeding, intruder]
+    feeding:
+      troughs:                      # pixel polygons, use tools/pick_zone.py to draw them
+        - name: hay_rack
+          polygon: [[40, 300], [600, 300], [600, 460], [40, 460]]
+    intruder:
+      restricted_zones: []          # e.g. [{name: lambing_pen, polygon: [[...], ...]}]
+
+  - name: yard_gate
+    source: "rtsp://user:pass@192.168.1.51:554/h264Preview_01_main"
+    monitors: [intruder]
+    intruder:
+      allowed_hours: ["06:00-20:00"]
+      restricted_zones: []
+
+detector:
+  model: "yolo11n.pt"      # downloaded automatically on first run; yolo11s.pt is more accurate, slower
+  conf: 0.35
+  sample_fps: 2            # frames per second fed to YOLO per camera
+  tracker: "bytetrack.yaml"
+  device: ""               # "" = auto, "cpu", "0" for first GPU, "mps" on Apple silicon
+
+vision:
+  model: "jev-latest"
+  timeout_seconds: 60
+  daily_budget: 2000       # non-urgent vision calls per day (lambing and intruder checks bypass it)
+
+# ---------------- Phase 1: lambing ----------------
+lambing:
+  behavior:
+    window_minutes: 15          # look-back window for restlessness
+    lying_height_ratio: 0.72    # box height / standing height below this = lying
+    side_aspect_ratio: 2.1      # box width/height above this = lying flat on side
+    min_transitions: 4          # lie<->stand changes inside the window that count as restless
+    posture_stable_samples: 3   # consecutive samples before a posture change is accepted
+    isolation_factor: 2.0       # nearest-neighbour distance / median above this = isolated
+    isolation_minutes: 5        # how long she must stay isolated
+    side_lying_minutes: 2.0     # continuous side-lying before it counts
+    suspect_score: 2.0          # weighted score at or above this = suspect, start AI confirmation
+  confirm:
+    interval_seconds: 45        # seconds between AI checks on a suspect ewe
+    safety_net_minutes: 10      # whole-pen AI check this often even with no suspect
+    consecutive_positive: 2     # consecutive labour answers required before alarm
+  alarm:
+    pre_alarm_on_early_labour: true
+    cooldown_minutes: 30        # per-ewe cooldown for pre-alarms
+    repeat_minutes: 5           # urgent alarms repeat this often until /ack in Telegram
+    dystocia_minutes: 60        # active labour longer than this with no lamb -> problem alarm
+
+# ---------------- Phase 2: feeding ----------------
+feeding:
+  feed_check_minutes: 20        # one trough image to the vision model this often
+  min_visit_seconds: 10         # shorter stays in the trough zone are ignored
+  inactive_hours: 4             # no trough visits for this long (daytime) -> warning
+  daytime: "06:00-20:00"
+  low_feed_cooldown_minutes: 120
+
+# ---------------- Phase 3: intruders ----------------
+intruder:
+  allowed_hours: ["06:00-20:00"]  # people and vehicles are normal inside these windows
+  min_frames: 3                   # consecutive detections before a trigger
+  cooldown_minutes: 10
+  dog_distance_bodies: 3.0        # dog closer than N sheep body-lengths -> trigger
+  alarm_vehicles: true
+
+storage:
+  db_path: "data/events.sqlite"
+  snapshot_dir: "data/snapshots"

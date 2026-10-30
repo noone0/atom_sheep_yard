@@ -1,0 +1,12 @@
+services:
+  farmwatch:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
+    ports:
+      - "8080:8080"
+    # For an NVIDIA Jetson / GPU box, uncomment:
+    # runtime: nvidia
